@@ -5,6 +5,7 @@ import argparse
 from dotenv import load_dotenv
 
 from .db import add_opportunity, init_db, list_opportunities
+from .drafts import build_application_draft
 from .models import Opportunity
 from .scoring import score_opportunity
 from .telegram import format_alert, send_alert
@@ -31,7 +32,21 @@ def build_parser() -> argparse.ArgumentParser:
     notify = sub.add_parser("notify")
     notify.add_argument("--min-score", type=float, default=35)
 
+    drafts = sub.add_parser("drafts")
+    drafts.add_argument("--min-score", type=float, default=35)
+    drafts.add_argument("--limit", type=int, default=5)
+
     return parser
+
+
+def _ranked(min_score: float):
+    ranked = []
+    for item in list_opportunities():
+        result = score_opportunity(item)
+        if result.score >= min_score:
+            ranked.append((result.score, item, result))
+    ranked.sort(key=lambda row: row[0], reverse=True)
+    return ranked
 
 
 def main() -> None:
@@ -58,12 +73,7 @@ def main() -> None:
         print(f"Saved #{item_id}; score={result.score}")
         return
 
-    ranked = []
-    for item in list_opportunities():
-        result = score_opportunity(item)
-        if result.score >= args.min_score:
-            ranked.append((result.score, item, result))
-    ranked.sort(key=lambda row: row[0], reverse=True)
+    ranked = _ranked(args.min_score)
 
     if args.command == "list":
         for score, item, _ in ranked:
@@ -75,6 +85,13 @@ def main() -> None:
         for _, item, result in ranked:
             send_alert(format_alert(item, result))
         print(f"Sent {len(ranked)} alerts")
+        return
+
+    if args.command == "drafts":
+        for score, item, result in ranked[: args.limit]:
+            print(f"\n=== {score} | {item.title} ===")
+            print(item.url)
+            print(build_application_draft(item, result))
 
 
 if __name__ == "__main__":
