@@ -31,18 +31,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.naeirae.fincontrol.domain.CapitalEfficiency
-import com.naeirae.fincontrol.domain.CapitalRole
-import com.naeirae.fincontrol.domain.CurrencyCode
-import com.naeirae.fincontrol.domain.FinancialObject
-import com.naeirae.fincontrol.domain.FinancialObjectType
-import com.naeirae.fincontrol.domain.MoneyAmount
+import com.naeirae.fincontrol.domain.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FinancialObjectsScreen(
     viewModel: FinancialObjectsViewModel = viewModel(),
     onOpenObligation: (String) -> Unit = {},
+    onOpenObject: (String) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var editing by remember { mutableStateOf<FinancialObject?>(null) }
@@ -54,11 +50,7 @@ fun FinancialObjectsScreen(
                 initial = editing,
                 modifier = Modifier.padding(padding),
                 onCancel = { creating = false; editing = null },
-                onSave = {
-                    viewModel.save(it)
-                    creating = false
-                    editing = null
-                },
+                onSave = { viewModel.save(it); creating = false; editing = null },
             )
         } else {
             LazyColumn(
@@ -84,14 +76,13 @@ fun FinancialObjectsScreen(
                 items(state.visible, key = { it.id }) { item ->
                     FinancialObjectCard(
                         item = item,
-                        onOpen = if (item.type == FinancialObjectType.OBLIGATION) ({ onOpenObligation(item.id) }) else null,
+                        onOpen = { onOpenObject(item.id) },
+                        onCoverage = if (item.type == FinancialObjectType.OBLIGATION) ({ onOpenObligation(item.id) }) else null,
                         onEdit = { editing = item },
                         onArchive = { viewModel.archive(item.id) },
                     )
                 }
-                item {
-                    Button(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) { Text("Добавить крупный объект") }
-                }
+                item { Button(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) { Text("Добавить крупный объект") } }
             }
         }
     }
@@ -100,7 +91,8 @@ fun FinancialObjectsScreen(
 @Composable
 private fun FinancialObjectCard(
     item: FinancialObject,
-    onOpen: (() -> Unit)?,
+    onOpen: () -> Unit,
+    onCoverage: (() -> Unit)?,
     onEdit: () -> Unit,
     onArchive: () -> Unit,
 ) {
@@ -112,10 +104,7 @@ private fun FinancialObjectCard(
             item.capitalRequired?.let { Text("Нужно вложить: ${formatMoney(it)}") }
             item.expectedGain?.let { Text("Ожидаемый возврат: ${formatMoney(it)}") }
             item.probabilityPercent?.let { Text("Вероятность: $it%") }
-            CapitalEfficiency.evaluate(item)?.let { metrics ->
-                val weightedRoi = metrics.probabilityWeightedRoiPercent
-                if (weightedRoi != null) Text("Ожидаемый ROI: ${"%.1f".format(weightedRoi)}%")
-            }
+            CapitalEfficiency.evaluate(item)?.probabilityWeightedRoiPercent?.let { Text("Ожидаемый ROI: ${"%.1f".format(it)}%") }
             item.dueDate?.let { Text("Дедлайн: $it") }
             item.nextAction?.let { Text("Следующее действие: $it") }
             if (item.tags.isNotEmpty()) {
@@ -124,7 +113,8 @@ private fun FinancialObjectCard(
                 }
             }
             Row {
-                onOpen?.let { TextButton(onClick = it) { Text("Покрытие") } }
+                TextButton(onClick = onOpen) { Text("Открыть") }
+                onCoverage?.let { TextButton(onClick = it) { Text("Покрытие") } }
                 TextButton(onClick = onEdit) { Text("Изменить") }
                 TextButton(onClick = onArchive) { Text("В архив") }
             }
@@ -166,7 +156,6 @@ private fun FinancialObjectEditor(
                 }
             }
         }
-
         if (type in setOf(FinancialObjectType.OPPORTUNITY, FinancialObjectType.ASSET, FinancialObjectType.INCOME_SOURCE, FinancialObjectType.CLAIM)) {
             item { Text("Экономика вложения", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
             item { OutlinedTextField(capitalRequired, { capitalRequired = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Сколько капитала нужно") }) }
@@ -180,11 +169,8 @@ private fun FinancialObjectEditor(
                     FilterChip(capitalRole == CapitalRole.INVESTMENT, { capitalRole = CapitalRole.INVESTMENT }, label = { Text("Инвестиционный") })
                 }
             }
-            item {
-                Row { Checkbox(checked = scalable, onCheckedChange = { scalable = it }); Text("Можно масштабировать") }
-            }
+            item { Row { Checkbox(checked = scalable, onCheckedChange = { scalable = it }); Text("Можно масштабировать") } }
         }
-
         item { OutlinedTextField(nextAction, { nextAction = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Следующее действие") }, minLines = 2) }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
