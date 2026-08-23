@@ -35,16 +35,14 @@ fun FinancialObjectDetailScreen(
     val probability = probabilityText.toIntOrNull()?.coerceIn(0, 100) ?: 100
     val lockDays = lockDaysText.toIntOrNull()?.coerceAtLeast(0)
 
-    val metrics = if (capital != null && capital > 0.0 && grossReturn != null) {
-        WorkingCapitalCalculator.calculate(
-            WorkingCapitalInput(
-                capital = MoneyAmount(capital, currency),
-                grossReturnIfSuccessful = MoneyAmount(grossReturn, currency),
-                probabilityPercent = probability,
-                liquidityLockDays = lockDays,
-            ),
-        )
-    } else null
+    val draft = item.copy(
+        capitalRequired = capital?.let { MoneyAmount(it, currency) },
+        expectedGain = grossReturn?.let { MoneyAmount(it, currency) },
+        probabilityPercent = probability,
+        liquidityLockDays = lockDays,
+        capitalRole = item.capitalRole ?: CapitalRole.WORKING,
+    )
+    val metrics = CapitalEfficiency.evaluate(draft)
 
     Scaffold(
         topBar = {
@@ -104,12 +102,12 @@ fun FinancialObjectDetailScreen(
                     item {
                         Card(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                DetailMetric("Прибыль при успехе", detailMoney(value.profitIfSuccessful))
-                                DetailMetric("Ожидаемая прибыль", detailMoney(value.expectedProfit))
-                                DetailMetric("ROI при успехе", "${"%.1f".format(value.roiPercent)}%")
-                                DetailMetric("Ожидаемый ROI", "${"%.1f".format(value.probabilityAdjustedRoiPercent)}%")
-                                value.expectedProfitPerDay?.let { DetailMetric("Ожидаемая прибыль в день", detailMoney(it)) }
-                                value.paybackDaysAtExpectedRate?.let { DetailMetric("Расчётная окупаемость", "${"%.1f".format(it)} дн.") }
+                                DetailMetric("Прибыль при успехе", detailMoney(value.expectedProfit))
+                                DetailMetric("Ожидаемая прибыль", detailMoney(value.probabilityWeightedProfit))
+                                value.roiPercent?.let { DetailMetric("ROI при успехе", "${"%.1f".format(it)}%") }
+                                value.probabilityWeightedRoiPercent?.let { DetailMetric("Ожидаемый ROI", "${"%.1f".format(it)}%") }
+                                value.profitPerLockedDay?.let { DetailMetric("Ожидаемая прибыль в день", "${"%,.0f".format(it)}") }
+                                value.paybackDays?.let { DetailMetric("Расчётная окупаемость", "${"%.1f".format(it)} дн.") }
                             }
                         }
                     }
@@ -119,17 +117,7 @@ fun FinancialObjectDetailScreen(
                     Button(
                         modifier = Modifier.fillMaxWidth(),
                         enabled = capital != null && grossReturn != null,
-                        onClick = {
-                            onSave(
-                                item.copy(
-                                    capitalRequired = capital?.let { MoneyAmount(it, currency) },
-                                    expectedGain = grossReturn?.let { MoneyAmount(it, currency) },
-                                    probabilityPercent = probability,
-                                    liquidityLockDays = lockDays,
-                                    capitalRole = item.capitalRole ?: CapitalRole.WORKING,
-                                ),
-                            )
-                        },
+                        onClick = { onSave(draft) },
                     ) { Text("Сохранить экономику") }
                 }
             }
