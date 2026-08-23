@@ -34,6 +34,13 @@ enum class SourceKind {
     IMPORT,
 }
 
+enum class CapitalRole {
+    LIQUIDITY,
+    PROTECTED,
+    WORKING,
+    INVESTMENT,
+}
+
 data class SourceReference(
     val kind: SourceKind,
     val label: String? = null,
@@ -50,6 +57,14 @@ data class FinancialObject(
     val dueDate: LocalDate? = null,
     val probabilityPercent: Int? = null,
     val protectedAmount: MoneyAmount? = null,
+    val capitalRole: CapitalRole? = null,
+    val capitalRequired: MoneyAmount? = null,
+    val guaranteedSaving: MoneyAmount? = null,
+    val expectedGain: MoneyAmount? = null,
+    val annualRatePercent: Double? = null,
+    val riskScore: Double? = null,
+    val liquidityLockDays: Int? = null,
+    val scalable: Boolean? = null,
     val tags: Set<String> = emptySet(),
     val nextAction: String? = null,
     val notes: String? = null,
