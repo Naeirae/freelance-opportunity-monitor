@@ -38,18 +38,22 @@ object AppContainer {
 
     private var initialized = false
     private var objectRepository: FinancialObjectRepository = InMemoryFinancialObjectRepository(seedObjects)
+    private var linkRepository: FinancialLinkRepository = InMemoryFinancialLinkRepository()
 
     val financialObjects: FinancialObjectRepository
         get() = objectRepository
 
-    val financialLinks: FinancialLinkRepository = InMemoryFinancialLinkRepository()
+    val financialLinks: FinancialLinkRepository
+        get() = linkRepository
 
     fun initialize(context: Context) {
         if (initialized) return
+        val appContext = context.applicationContext
         objectRepository = SharedPreferencesFinancialObjectRepository(
-            context = context.applicationContext,
+            context = appContext,
             seed = seedObjects,
         )
+        linkRepository = SharedPreferencesFinancialLinkRepository(appContext)
         initialized = true
     }
 }
