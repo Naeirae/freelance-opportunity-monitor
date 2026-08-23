@@ -39,6 +39,7 @@ import com.naeirae.fincontrol.domain.MoneyAmount
 @Composable
 fun FinancialObjectsScreen(
     viewModel: FinancialObjectsViewModel = viewModel(),
+    onOpenObligation: (String) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var editing by remember { mutableStateOf<FinancialObject?>(null) }
@@ -114,6 +115,9 @@ fun FinancialObjectsScreen(
                 items(state.visible, key = { it.id }) { item ->
                     FinancialObjectCard(
                         item = item,
+                        onOpen = if (item.type == FinancialObjectType.OBLIGATION) {
+                            { onOpenObligation(item.id) }
+                        } else null,
                         onEdit = { editing = item },
                         onArchive = { viewModel.archive(item.id) },
                     )
@@ -131,6 +135,7 @@ fun FinancialObjectsScreen(
 @Composable
 private fun FinancialObjectCard(
     item: FinancialObject,
+    onOpen: (() -> Unit)?,
     onEdit: () -> Unit,
     onArchive: () -> Unit,
 ) {
@@ -151,6 +156,7 @@ private fun FinancialObjectCard(
                 }
             }
             Row {
+                onOpen?.let { TextButton(onClick = it) { Text("Покрытие") } }
                 TextButton(onClick = onEdit) { Text("Изменить") }
                 TextButton(onClick = onArchive) { Text("В архив") }
             }
