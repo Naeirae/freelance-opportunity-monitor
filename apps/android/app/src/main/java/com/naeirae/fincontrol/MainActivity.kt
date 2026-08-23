@@ -20,7 +20,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.naeirae.fincontrol.domain.*
+import com.naeirae.fincontrol.domain.CurrencyCode
+import com.naeirae.fincontrol.domain.MoneyAmount
 import com.naeirae.fincontrol.ui.*
 
 class MainActivity : ComponentActivity() {
@@ -100,8 +101,12 @@ private fun FinancialControlApp() {
                 )
             }
             composable("scenario") {
+                val vm: DecisionCandidatesViewModel = viewModel()
+                val flow = remember { vm.observe(CurrencyCode.RUB) }
+                val candidates by flow.collectAsStateWithLifecycle()
                 DecisionScenarioScreen(
-                    candidates = demoActionCandidates(),
+                    currency = CurrencyCode.RUB,
+                    candidates = candidates,
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -185,35 +190,6 @@ private fun DashboardScreen(
         }
     }
 }
-
-private fun demoActionCandidates(): List<ActionCandidate> = listOf(
-    ActionCandidate(
-        id = "keep-liquid",
-        title = "Оставить деньги ликвидными",
-        required = MoneyAmount(0.0, CurrencyCode.RUB),
-        liquidityCost = MoneyAmount(0.0, CurrencyCode.RUB),
-        expectedBenefit = MoneyAmount(0.0, CurrencyCode.RUB),
-        urgencyBonus = 15.0,
-        notes = "Подходит, если впереди неопределённые обязательные расходы.",
-    ),
-    ActionCandidate(
-        id = "debt-partial",
-        title = "Частично уменьшить дорогой долг",
-        required = MoneyAmount(5_000.0, CurrencyCode.RUB),
-        liquidityCost = MoneyAmount(5_000.0, CurrencyCode.RUB),
-        guaranteedBenefit = MoneyAmount(250.0, CurrencyCode.RUB),
-        urgencyBonus = 5.0,
-    ),
-    ActionCandidate(
-        id = "income-tool",
-        title = "Вложить в действие, повышающее доход",
-        required = MoneyAmount(3_000.0, CurrencyCode.RUB),
-        liquidityCost = MoneyAmount(3_000.0, CurrencyCode.RUB),
-        expectedBenefit = MoneyAmount(9_000.0, CurrencyCode.RUB),
-        riskPenalty = 25.0,
-        notes = "Ожидаемый, а не гарантированный эффект.",
-    ),
-)
 
 @Composable
 private fun MetricCard(title: String, amount: MoneyAmount, modifier: Modifier = Modifier) {
