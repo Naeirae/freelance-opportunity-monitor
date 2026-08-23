@@ -1,5 +1,6 @@
 package com.naeirae.fincontrol.data
 
+import android.content.Context
 import com.naeirae.fincontrol.domain.CurrencyCode
 import com.naeirae.fincontrol.domain.FinancialObject
 import com.naeirae.fincontrol.domain.FinancialObjectType
@@ -35,6 +36,20 @@ object AppContainer {
         ),
     )
 
-    val financialObjects: FinancialObjectRepository = InMemoryFinancialObjectRepository(seedObjects)
+    private var initialized = false
+    private var objectRepository: FinancialObjectRepository = InMemoryFinancialObjectRepository(seedObjects)
+
+    val financialObjects: FinancialObjectRepository
+        get() = objectRepository
+
     val financialLinks: FinancialLinkRepository = InMemoryFinancialLinkRepository()
+
+    fun initialize(context: Context) {
+        if (initialized) return
+        objectRepository = SharedPreferencesFinancialObjectRepository(
+            context = context.applicationContext,
+            seed = seedObjects,
+        )
+        initialized = true
+    }
 }
