@@ -40,10 +40,7 @@ object AutomaticActionGenerator {
         return result.distinctBy { it.id }
     }
 
-    private fun obligationCandidate(
-        item: FinancialObject,
-        context: ActionGenerationContext,
-    ): ActionCandidate? {
+    private fun obligationCandidate(item: FinancialObject, context: ActionGenerationContext): ActionCandidate? {
         val balance = item.amount?.takeIf { it.currency == context.currency } ?: return null
         val minimum = item.capitalRequired?.takeIf { it.currency == context.currency }?.amount ?: balance.amount
         val required = minimum.coerceAtMost(balance.amount).coerceAtLeast(0.0)
@@ -63,28 +60,20 @@ object AutomaticActionGenerator {
             guaranteedBenefit = guaranteed,
             expectedBenefit = null,
             liquidityCost = MoneyAmount(required, context.currency),
-            riskPenalty = 0.0,
             urgencyBonus = urgency(item, context.today),
             notes = item.nextAction ?: "Сравнить экономию на стоимости долга с потерей ликвидности.",
         )
     }
 
-    private fun growthCandidate(
-        item: FinancialObject,
-        context: ActionGenerationContext,
-    ): ActionCandidate? {
+    private fun growthCandidate(item: FinancialObject, context: ActionGenerationContext): ActionCandidate? {
         val capital = item.capitalRequired?.takeIf { it.currency == context.currency } ?: return null
         if (capital.amount <= 0.0) return null
 
-        val explicitGain = item.expectedGain?.takeIf { it.currency == context.currency }
-        val fallbackGain = item.amount
-            ?.takeIf { it.currency == context.currency && item.type == FinancialObjectType.OPPORTUNITY }
-            ?.let { potential ->
-                val probability = (item.probabilityPercent ?: 50).coerceIn(0, 100) / 100.0
-                MoneyAmount(potential.amount * probability, context.currency)
-            }
+        val metrics = CapitalEfficiency.evaluate(item)
+        val expectedNetBenefit = metrics
+            ?.probabilityWeightedProfit
+            ?.takeIf { it.currency == context.currency }
 
-        val expected = explicitGain ?: fallbackGain
         val risk = (item.riskScore ?: defaultRisk(item.type)).coerceAtLeast(0.0)
         val lockPenalty = (item.liquidityLockDays ?: 0).coerceAtLeast(0) / 30.0 * 3.0
         val scalabilityBonus = if (item.scalable == true) 12.0 else 0.0
@@ -99,30 +88,33 @@ object AutomaticActionGenerator {
             },
             required = capital,
             guaranteedBenefit = item.guaranteedSaving?.takeIf { it.currency == context.currency },
-            expectedBenefit = expected,
+            expectedBenefit = expectedNetBenefit,
             liquidityCost = capital,
             riskPenalty = risk + lockPenalty,
             urgencyBonus = urgency(item, context.today) + scalabilityBonus,
-            notes = item.nextAction ?: "Сравнить ожидаемую отдачу, срок до денег и риск потери капитала.",
+            notes = buildString {
+                append(item.nextAction ?: "Сравнить ожидаемую отдачу, срок до денег и риск потери капитала.")
+                metrics?.probabilityWeightedRoiPercent?.let { append(" Ожидаемый ROI: ${"%.1f".format(it)}%.") }
+                item.liquidityLockDays?.let { append(" Срок снижения ликвидности: $it дн.") }
+            },
         )
     }
 
-    private fun claimCandidate(
-        item: FinancialObject,
-        context: ActionGenerationContext,
-    ): ActionCandidate? {
+    private fun claimCandidate(item: FinancialObject, context: ActionGenerationContext): ActionCandidate? {
         val cost = item.capitalRequired?.takeIf { it.currency == context.currency } ?: return null
         val claim = item.amount?.takeIf { it.currency == context.currency }
         val probability = (item.probabilityPercent ?: 50).coerceIn(0, 100) / 100.0
-        val expected = item.expectedGain?.takeIf { it.currency == context.currency }
-            ?: claim?.let { MoneyAmount(it.amount * probability, context.currency) }
+        val expectedGross = item.expectedGain?.takeIf { it.currency == context.currency } ?: claim
+        val expectedNet = expectedGross?.let {
+            MoneyAmount(it.amount * probability - cost.amount, context.currency)
+        }
 
         return ActionCandidate(
             id = "claim-${item.id}",
             title = "Потратить на получение денег: ${item.title}",
             required = cost,
             guaranteedBenefit = item.guaranteedSaving?.takeIf { it.currency == context.currency },
-            expectedBenefit = expected,
+            expectedBenefit = expectedNet,
             liquidityCost = cost,
             riskPenalty = item.riskScore ?: 20.0,
             urgencyBonus = urgency(item, context.today),
