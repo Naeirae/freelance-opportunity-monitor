@@ -2,16 +2,16 @@ package com.naeirae.fincontrol.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.naeirae.fincontrol.data.AppContainer
 import com.naeirae.fincontrol.data.FinancialLinkRepository
 import com.naeirae.fincontrol.data.FinancialObjectRepository
-import com.naeirae.fincontrol.data.InMemoryFinancialLinkRepository
 import com.naeirae.fincontrol.domain.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 class ObligationDetailViewModel(
-    private val objects: FinancialObjectRepository,
-    private val links: FinancialLinkRepository = InMemoryFinancialLinkRepository(),
+    private val objects: FinancialObjectRepository = AppContainer.financialObjects,
+    private val links: FinancialLinkRepository = AppContainer.financialLinks,
 ) : ViewModel() {
 
     fun observe(obligationId: String): StateFlow<ObligationDetailState> = combine(
