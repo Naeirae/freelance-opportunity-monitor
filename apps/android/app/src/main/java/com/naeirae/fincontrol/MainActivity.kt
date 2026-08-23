@@ -4,41 +4,24 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.naeirae.fincontrol.domain.CurrencyCode
-import com.naeirae.fincontrol.domain.MoneyAmount
-import com.naeirae.fincontrol.ui.DashboardViewModel
-import com.naeirae.fincontrol.ui.FinancialObjectsScreen
+import androidx.navigation.navArgument
+import com.naeirae.fincontrol.domain.*
+import com.naeirae.fincontrol.ui.*
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,27 +42,30 @@ private fun FinancialControlApp() {
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route ?: "dashboard"
+    val showBottomBar = currentRoute == "dashboard" || currentRoute == "objects"
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    selected = currentRoute == "dashboard",
-                    onClick = {
-                        navController.navigate("dashboard") {
-                            launchSingleTop = true
-                            popUpTo("dashboard") { inclusive = false }
-                        }
-                    },
-                    icon = { Text("Ф") },
-                    label = { Text("Главная") },
-                )
-                NavigationBarItem(
-                    selected = currentRoute == "objects",
-                    onClick = { navController.navigate("objects") { launchSingleTop = true } },
-                    icon = { Text("О") },
-                    label = { Text("Объекты") },
-                )
+            if (showBottomBar) {
+                NavigationBar {
+                    NavigationBarItem(
+                        selected = currentRoute == "dashboard",
+                        onClick = {
+                            navController.navigate("dashboard") {
+                                launchSingleTop = true
+                                popUpTo("dashboard") { inclusive = false }
+                            }
+                        },
+                        icon = { Text("Ф") },
+                        label = { Text("Главная") },
+                    )
+                    NavigationBarItem(
+                        selected = currentRoute == "objects",
+                        onClick = { navController.navigate("objects") { launchSingleTop = true } },
+                        icon = { Text("О") },
+                        label = { Text("Объекты") },
+                    )
+                }
             }
         },
     ) { outerPadding ->
@@ -88,14 +74,46 @@ private fun FinancialControlApp() {
             startDestination = "dashboard",
             modifier = Modifier.padding(outerPadding),
         ) {
-            composable("dashboard") { DashboardScreen() }
-            composable("objects") { FinancialObjectsScreen() }
+            composable("dashboard") {
+                DashboardScreen(onOpenScenario = { navController.navigate("scenario") })
+            }
+            composable("objects") {
+                FinancialObjectsScreen(
+                    onOpenObligation = { id -> navController.navigate("obligation/$id") },
+                )
+            }
+            composable(
+                route = "obligation/{id}",
+                arguments = listOf(navArgument("id") { type = NavType.StringType }),
+            ) { entry ->
+                val id = entry.arguments?.getString("id") ?: return@composable
+                val vm: ObligationDetailViewModel = viewModel()
+                val flow = remember(id) { vm.observe(id) }
+                val state by flow.collectAsStateWithLifecycle()
+                ObligationDetailScreen(
+                    state = state,
+                    onBack = { navController.popBackStack() },
+                    onAssignCoverage = { source, amount, probability ->
+                        vm.assignCoverage(id, source, amount, probability)
+                    },
+                    onRemoveCoverage = vm::removeCoverage,
+                )
+            }
+            composable("scenario") {
+                DecisionScenarioScreen(
+                    candidates = demoActionCandidates(),
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
+private fun DashboardScreen(
+    viewModel: DashboardViewModel = viewModel(),
+    onOpenScenario: () -> Unit,
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     LazyColumn(
@@ -145,7 +163,7 @@ private fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
 
         item { SectionTitle("Ожидаемые деньги") }
         items(state.expectedIncome) { income ->
-            androidx.compose.material3.ListItem(
+            ListItem(
                 headlineContent = { Text(income.name) },
                 supportingContent = { Text("Вероятность: ${income.probabilityPercent}%${income.expectedDate?.let { ", ожидается $it" } ?: ""}") },
                 trailingContent = { Text(formatMoney(income.amount), fontWeight = FontWeight.SemiBold) },
@@ -160,13 +178,42 @@ private fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
 
         item {
             Spacer(Modifier.height(12.dp))
-            Button(onClick = { }, modifier = Modifier.fillMaxWidth()) {
-                Text("Быстрое финансовое действие")
+            Button(onClick = onOpenScenario, modifier = Modifier.fillMaxWidth()) {
+                Text("У меня есть свободная сумма — сравнить варианты")
             }
             Spacer(Modifier.height(32.dp))
         }
     }
 }
+
+private fun demoActionCandidates(): List<ActionCandidate> = listOf(
+    ActionCandidate(
+        id = "keep-liquid",
+        title = "Оставить деньги ликвидными",
+        required = MoneyAmount(0.0, CurrencyCode.RUB),
+        liquidityCost = MoneyAmount(0.0, CurrencyCode.RUB),
+        expectedBenefit = MoneyAmount(0.0, CurrencyCode.RUB),
+        urgencyBonus = 15.0,
+        notes = "Подходит, если впереди неопределённые обязательные расходы.",
+    ),
+    ActionCandidate(
+        id = "debt-partial",
+        title = "Частично уменьшить дорогой долг",
+        required = MoneyAmount(5_000.0, CurrencyCode.RUB),
+        liquidityCost = MoneyAmount(5_000.0, CurrencyCode.RUB),
+        guaranteedBenefit = MoneyAmount(250.0, CurrencyCode.RUB),
+        urgencyBonus = 5.0,
+    ),
+    ActionCandidate(
+        id = "income-tool",
+        title = "Вложить в действие, повышающее доход",
+        required = MoneyAmount(3_000.0, CurrencyCode.RUB),
+        liquidityCost = MoneyAmount(3_000.0, CurrencyCode.RUB),
+        expectedBenefit = MoneyAmount(9_000.0, CurrencyCode.RUB),
+        riskPenalty = 25.0,
+        notes = "Ожидаемый, а не гарантированный эффект.",
+    ),
+)
 
 @Composable
 private fun MetricCard(title: String, amount: MoneyAmount, modifier: Modifier = Modifier) {
