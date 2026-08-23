@@ -20,6 +20,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.naeirae.fincontrol.data.AppContainer
 import com.naeirae.fincontrol.domain.CurrencyCode
 import com.naeirae.fincontrol.domain.MoneyAmount
 import com.naeirae.fincontrol.ui.*
@@ -27,12 +28,11 @@ import com.naeirae.fincontrol.ui.*
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AppContainer.initialize(applicationContext)
         enableEdgeToEdge()
         setContent {
             MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    FinancialControlApp()
-                }
+                Surface(modifier = Modifier.fillMaxSize()) { FinancialControlApp() }
             }
         }
     }
@@ -81,6 +81,7 @@ private fun FinancialControlApp() {
             composable("objects") {
                 FinancialObjectsScreen(
                     onOpenObligation = { id -> navController.navigate("obligation/$id") },
+                    onOpenObject = { id -> navController.navigate("object/$id") },
                 )
             }
             composable(
@@ -94,10 +95,23 @@ private fun FinancialControlApp() {
                 ObligationDetailScreen(
                     state = state,
                     onBack = { navController.popBackStack() },
-                    onAssignCoverage = { source, amount, probability ->
-                        vm.assignCoverage(id, source, amount, probability)
-                    },
+                    onAssignCoverage = { source, amount, probability -> vm.assignCoverage(id, source, amount, probability) },
                     onRemoveCoverage = vm::removeCoverage,
+                )
+            }
+            composable(
+                route = "object/{id}",
+                arguments = listOf(navArgument("id") { type = NavType.StringType }),
+            ) { entry ->
+                val id = entry.arguments?.getString("id") ?: return@composable
+                val vm: FinancialObjectDetailViewModel = viewModel()
+                val flow = remember(id) { vm.observe(id) }
+                val item by flow.collectAsStateWithLifecycle()
+                FinancialObjectDetailScreen(
+                    item = item,
+                    onBack = { navController.popBackStack() },
+                    onSave = vm::save,
+                    onComplete = vm::complete,
                 )
             }
             composable("scenario") {
@@ -131,28 +145,21 @@ private fun DashboardScreen(
             Text("Финансовый центр", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text("Крупные деньги, обязательства и решения", style = MaterialTheme.typography.bodyMedium)
         }
-
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 MetricCard("Доступно", state.available, Modifier.weight(1f))
                 MetricCard("Защищено", state.protected, Modifier.weight(1f))
             }
         }
-
         item {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(18.dp)) {
                     Text("Свободно для решений", style = MaterialTheme.typography.labelLarge)
-                    Text(
-                        formatMoney(state.allocatable),
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Bold,
-                    )
+                    Text(formatMoney(state.allocatable), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
                     Text("Это максимум, который можно распределять без нарушения защищённой ликвидности.")
                 }
             }
         }
-
         item { SectionTitle("Ближайшие обязательства") }
         items(state.obligations) { obligation ->
             Card(modifier = Modifier.fillMaxWidth()) {
@@ -165,7 +172,6 @@ private fun DashboardScreen(
                 }
             }
         }
-
         item { SectionTitle("Ожидаемые деньги") }
         items(state.expectedIncome) { income ->
             ListItem(
@@ -175,17 +181,11 @@ private fun DashboardScreen(
             )
             HorizontalDivider()
         }
-
         item { SectionTitle("Требует внимания") }
-        items(state.attentionItems) { item ->
-            Text("• $item", style = MaterialTheme.typography.bodyLarge)
-        }
-
+        items(state.attentionItems) { item -> Text("• $item", style = MaterialTheme.typography.bodyLarge) }
         item {
             Spacer(Modifier.height(12.dp))
-            Button(onClick = onOpenScenario, modifier = Modifier.fillMaxWidth()) {
-                Text("У меня есть свободная сумма — сравнить варианты")
-            }
+            Button(onClick = onOpenScenario, modifier = Modifier.fillMaxWidth()) { Text("У меня есть свободная сумма — сравнить варианты") }
             Spacer(Modifier.height(32.dp))
         }
     }
