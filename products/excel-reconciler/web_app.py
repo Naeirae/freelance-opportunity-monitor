@@ -30,8 +30,14 @@ def result_to_excel(result: dict[str, pd.DataFrame]) -> bytes:
     return buffer.getvalue()
 
 
-st.title("Excel / CSV Reconciler")
-st.caption("Сверка двух таблиц: пропуски, новые записи, изменения и дубли.")
+def metric_value(result: dict[str, pd.DataFrame], name: str) -> int:
+    summary = result["summary"]
+    match = summary.loc[summary["metric"] == name, "value"]
+    return int(match.iloc[0]) if not match.empty else 0
+
+
+st.title("Сверка Excel / CSV")
+st.caption("Загрузите две таблицы, выберите ключ и укажите, какие поля действительно нужно сравнить.")
 
 left_col, right_col = st.columns(2)
 with left_col:
@@ -49,79 +55,132 @@ if first_file and second_file:
 
     common_columns = [column for column in first.columns if column in second.columns]
     if not common_columns:
-        st.error("В файлах нет общих столбцов. Нужен хотя бы один общий столбец для ключа сверки.")
+        st.error("В файлах нет общих столбцов. Нужен хотя бы один общий столбец для сопоставления строк.")
         st.stop()
 
+    st.subheader("1. Настройка сверки")
     key = st.selectbox(
-        "По какому столбцу сопоставлять строки?",
+        "Какой столбец идентифицирует одну и ту же запись?",
         options=common_columns,
-        help="Например: id, номер заказа, артикул, email или другой уникальный идентификатор.",
+        help="Например: order_id, номер заказа, артикул, email или ID клиента.",
+    )
+
+    compare_options = [column for column in common_columns if column != key]
+    compare_columns = st.multiselect(
+        "Какие поля сравнивать?",
+        options=compare_options,
+        default=compare_options,
+        help="Снимите галочку с технических полей, изменения которых вам не важны.",
     )
 
     preview_left, preview_right = st.columns(2)
     with preview_left:
-        st.subheader("Первый файл")
-        st.dataframe(first.head(20), use_container_width=True)
+        st.markdown("**Первый файл**")
+        st.dataframe(first.head(20), use_container_width=True, hide_index=True)
         st.caption(f"Строк: {len(first):,} · Столбцов: {len(first.columns)}")
     with preview_right:
-        st.subheader("Второй файл")
-        st.dataframe(second.head(20), use_container_width=True)
+        st.markdown("**Второй файл**")
+        st.dataframe(second.head(20), use_container_width=True, hide_index=True)
         st.caption(f"Строк: {len(second):,} · Столбцов: {len(second.columns)}")
+
+    if not compare_columns:
+        st.warning("Вы не выбрали ни одного поля для сравнения. Будут найдены только новые/пропавшие записи и дубли.")
 
     if st.button("Сверить файлы", type="primary", use_container_width=True):
         try:
-            result = reconcile(first, second, key)
+            result = reconcile(first, second, key, compare_columns=compare_columns)
         except Exception as exc:
             st.error(f"Не удалось выполнить сверку: {exc}")
             st.stop()
 
         st.session_state["reconciliation_result"] = result
         st.session_state["reconciliation_key"] = key
+        st.session_state["reconciliation_compare_columns"] = compare_columns
 
 if "reconciliation_result" in st.session_state:
     result = st.session_state["reconciliation_result"]
     key = st.session_state["reconciliation_key"]
+    compare_columns = st.session_state.get("reconciliation_compare_columns", [])
 
-    summary_values = dict(zip(result["summary"]["metric"], result["summary"]["value"]))
+    only_first_count = metric_value(result, "only_first")
+    only_second_count = metric_value(result, "only_second")
+    changed_count = metric_value(result, "changed_common_keys")
+    changed_fields_count = metric_value(result, "changed_fields")
+    dup_first_count = metric_value(result, "duplicate_rows_first")
+    dup_second_count = metric_value(result, "duplicate_rows_second")
 
     st.divider()
-    st.subheader("Результат")
-    metric_cols = st.columns(5)
-    metric_cols[0].metric("Только в первом", int(summary_values.get("only_first", 0)))
-    metric_cols[1].metric("Только во втором", int(summary_values.get("only_second", 0)))
-    metric_cols[2].metric("Изменены", int(summary_values.get("changed_common_keys", 0)))
-    metric_cols[3].metric("Дубли в первом", int(summary_values.get("duplicate_rows_first", 0)))
-    metric_cols[4].metric("Дубли во втором", int(summary_values.get("duplicate_rows_second", 0)))
-
-    tab_summary, tab_first, tab_second, tab_changed, tab_duplicates = st.tabs(
-        ["Сводка", "Только в первом", "Только во втором", "Изменённые", "Дубли"]
+    st.subheader("2. Что найдено")
+    st.write(
+        f"Сверка по **{key}**. Сравнивались поля: "
+        + (", ".join(compare_columns) if compare_columns else "никакие — только наличие записей и дубли")
+        + "."
     )
 
-    with tab_summary:
-        st.dataframe(result["summary"], use_container_width=True, hide_index=True)
+    metric_cols = st.columns(5)
+    metric_cols[0].metric("Пропали из второго", only_first_count)
+    metric_cols[1].metric("Появились во втором", only_second_count)
+    metric_cols[2].metric("Изменённые записи", changed_count)
+    metric_cols[3].metric("Изменённые поля", changed_fields_count)
+    metric_cols[4].metric("Строк-дублей", dup_first_count + dup_second_count)
+
+    if all(value == 0 for value in [only_first_count, only_second_count, changed_count, dup_first_count, dup_second_count]):
+        st.success("По выбранным правилам расхождений не найдено.")
+    else:
+        st.info(
+            f"Итог: {only_first_count} записей есть только в первом файле, "
+            f"{only_second_count} — только во втором, "
+            f"{changed_count} записей изменились, "
+            f"обнаружено {dup_first_count + dup_second_count} строк-дублей."
+        )
+
+    tab_changes, tab_first, tab_second, tab_duplicates, tab_summary = st.tabs(
+        ["Что изменилось", "Только в первом", "Только во втором", "Дубли", "Сводка"]
+    )
+
+    with tab_changes:
+        changes = result["changes"]
+        if changes.empty:
+            st.success("В выбранных полях изменений нет.")
+        else:
+            visible_changes = changes.rename(
+                columns={key: "Ключ", "field": "Поле", "before": "Было", "after": "Стало"}
+            )
+            st.dataframe(visible_changes, use_container_width=True, hide_index=True)
 
     with tab_first:
-        st.dataframe(result["only_first"], use_container_width=True, hide_index=True)
+        if result["only_first"].empty:
+            st.success("Нет записей, которые присутствуют только в первом файле.")
+        else:
+            st.caption("Эти записи есть в первом файле, но отсутствуют во втором.")
+            st.dataframe(result["only_first"], use_container_width=True, hide_index=True)
 
     with tab_second:
-        st.dataframe(result["only_second"], use_container_width=True, hide_index=True)
-
-    with tab_changed:
-        if result["changed"].empty:
-            st.success("Совпадающие по ключу строки не отличаются.")
+        if result["only_second"].empty:
+            st.success("Нет записей, которые появились только во втором файле.")
         else:
-            st.caption(f"Ключ сопоставления: {key}")
-            st.dataframe(result["changed"], use_container_width=True, hide_index=True)
+            st.caption("Эти записи есть во втором файле, но отсутствуют в первом.")
+            st.dataframe(result["only_second"], use_container_width=True, hide_index=True)
 
     with tab_duplicates:
         left_dup, right_dup = st.columns(2)
         with left_dup:
-            st.markdown("**Первый файл**")
-            st.dataframe(result["duplicates_first"], use_container_width=True, hide_index=True)
+            st.markdown("**Дубли в первом файле**")
+            if result["duplicates_first"].empty:
+                st.success("Нет")
+            else:
+                st.dataframe(result["duplicates_first"], use_container_width=True, hide_index=True)
         with right_dup:
-            st.markdown("**Второй файл**")
-            st.dataframe(result["duplicates_second"], use_container_width=True, hide_index=True)
+            st.markdown("**Дубли во втором файле**")
+            if result["duplicates_second"].empty:
+                st.success("Нет")
+            else:
+                st.dataframe(result["duplicates_second"], use_container_width=True, hide_index=True)
 
+    with tab_summary:
+        st.dataframe(result["human_summary"], use_container_width=True, hide_index=True)
+
+    st.subheader("3. Скачать результат")
     report_bytes = result_to_excel(result)
     st.download_button(
         "Скачать Excel-отчёт",
@@ -133,4 +192,4 @@ if "reconciliation_result" in st.session_state:
     )
 
 st.divider()
-st.caption("Файлы обрабатываются в памяти приложения. Для публичного размещения нужно отдельно настроить политику хранения и конфиденциальности.")
+st.caption("Файлы обрабатываются в памяти приложения. Для публичного размещения нужно отдельно настроить хранение, удаление и конфиденциальность клиентских данных.")
