@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 from .db import add_opportunity, init_db, list_opportunities
 from .drafts import build_application_draft
+from .kwork import categories_from_env, fetch_kwork_projects
 from .models import Opportunity
 from .scoring import score_opportunity
 from .telegram import format_alert, send_alert
@@ -36,6 +37,15 @@ def build_parser() -> argparse.ArgumentParser:
     drafts.add_argument("--min-score", type=float, default=35)
     drafts.add_argument("--limit", type=int, default=5)
 
+    collect = sub.add_parser("collect-kwork")
+    collect.add_argument(
+        "--categories",
+        help="Comma-separated Kwork category ids. If omitted, uses KWORK_CATEGORIES; if that is empty, scans the public all-projects feed.",
+    )
+    collect.add_argument("--page", type=int, default=1)
+    collect.add_argument("--min-score", type=float, default=20)
+    collect.add_argument("--notify", action="store_true", help="Send Telegram alerts only for newly seen projects above min score")
+
     return parser
 
 
@@ -47,6 +57,12 @@ def _ranked(min_score: float):
             ranked.append((result.score, item, result))
     ranked.sort(key=lambda row: row[0], reverse=True)
     return ranked
+
+
+def _parse_categories(raw: str | None) -> list[int]:
+    if raw is None:
+        return categories_from_env()
+    return [int(token.strip()) for token in raw.split(",") if token.strip()]
 
 
 def main() -> None:
@@ -71,6 +87,32 @@ def main() -> None:
         item_id = add_opportunity(item)
         result = score_opportunity(item)
         print(f"Saved #{item_id}; score={result.score}")
+        return
+
+    if args.command == "collect-kwork":
+        existing_urls = {item.url for item in list_opportunities()}
+        projects = fetch_kwork_projects(_parse_categories(args.categories), page=args.page)
+
+        new_count = 0
+        notified = 0
+        ranked_new: list[tuple[float, Opportunity]] = []
+        for item in projects:
+            is_new = item.url not in existing_urls
+            add_opportunity(item)
+            if not is_new:
+                continue
+            new_count += 1
+            result = score_opportunity(item)
+            ranked_new.append((result.score, item))
+            if args.notify and result.score >= args.min_score:
+                send_alert(format_alert(item, result))
+                notified += 1
+
+        ranked_new.sort(key=lambda row: row[0], reverse=True)
+        print(f"Fetched {len(projects)} Kwork projects; new={new_count}; notified={notified}")
+        for score, item in ranked_new[:20]:
+            budget = item.budget_rub if item.budget_rub is not None else "?"
+            print(f"{score:>5} | {budget} RUB | {item.title} | {item.url}")
         return
 
     ranked = _ranked(args.min_score)
