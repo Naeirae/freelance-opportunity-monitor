@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Market Research Companion",
+  "version": "0.1.0",
+  "description": "Capture market-demand signals and write them to Google Sheets.",
+  "permissions": ["activeTab", "storage", "identity", "scripting"],
+  "host_permissions": ["https://sheets.googleapis.com/*"],
+  "oauth2": {
+    "client_id": "REPLACE_WITH_CHROME_EXTENSION_OAUTH_CLIENT_ID.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/spreadsheets"
+    ]
+  },
+  "action": {
+    "default_title": "Market Research Companion",
+    "default_popup": "popup.html"
+  }
+}
