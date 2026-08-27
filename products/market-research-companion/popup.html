@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Market Research Companion</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <h1>Market Research</h1>
+
+    <label>Spreadsheet ID
+      <input id="spreadsheetId" placeholder="1sOpk8dQB9V...">
+    </label>
+
+    <label>Лист
+      <input id="sheetName" value="Sheet1">
+    </label>
+
+    <button id="saveSettings">Сохранить настройки</button>
+    <button id="auth">Подключить Google</button>
+
+    <hr>
+
+    <label>Поисковый запрос
+      <input id="query" placeholder="ai agent action verification">
+    </label>
+
+    <label>Рынок / страна
+      <input id="market" placeholder="US / Global / EU / RU">
+    </label>
+
+    <label>Язык
+      <input id="language" placeholder="en / ru">
+    </label>
+
+    <label>Тип сигнала
+      <select id="signalType">
+        <option value="competitor">competitor</option>
+        <option value="discussion">discussion</option>
+        <option value="documentation">documentation</option>
+        <option value="article">article</option>
+        <option value="pricing">pricing</option>
+        <option value="search-result">search-result</option>
+        <option value="other">other</option>
+      </select>
+    </label>
+
+    <label>Цена / тариф
+      <input id="visiblePrice" placeholder="$19/mo">
+    </label>
+
+    <label>Проблема / обещание
+      <textarea id="problem" rows="3"></textarea>
+    </label>
+
+    <label>Незакрытая дыра
+      <textarea id="gap" rows="3"></textarea>
+    </label>
+
+    <label>AI-resistance 1–5
+      <input id="aiResistance" type="number" min="1" max="5">
+    </label>
+
+    <label>Коммерческий intent 1–5
+      <input id="commercialIntent" type="number" min="1" max="5">
+    </label>
+
+    <button id="capture">Сохранить сигнал</button>
+    <button id="flush">Повторить отправку очереди</button>
+
+    <pre id="status"></pre>
+  </main>
+  <script src="sheets.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
