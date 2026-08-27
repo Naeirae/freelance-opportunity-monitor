@@ -15,7 +15,7 @@
     </label>
 
     <label>Лист
-      <input id="sheetName" value="Sheet1">
+      <input id="sheetName" value="Сигналы">
     </label>
 
     <button id="saveSettings">Сохранить настройки</button>
@@ -27,6 +27,10 @@
       <input id="query" placeholder="ai agent action verification">
     </label>
 
+    <label>Семейство запросов
+      <input id="queryFamily" placeholder="agent verification">
+    </label>
+
     <label>Рынок / страна
       <input id="market" placeholder="US / Global / EU / RU">
     </label>
@@ -35,8 +39,8 @@
       <input id="language" placeholder="en / ru">
     </label>
 
-    <label>Тип сигнала
-      <select id="signalType">
+    <label>Тип результата
+      <select id="resultType">
         <option value="competitor">competitor</option>
         <option value="discussion">discussion</option>
         <option value="documentation">documentation</option>
@@ -47,24 +51,36 @@
       </select>
     </label>
 
+    <label>Конкурент / продукт
+      <input id="competitor">
+    </label>
+
     <label>Цена / тариф
-      <input id="visiblePrice" placeholder="$19/mo">
+      <input id="price" placeholder="$19/mo">
     </label>
 
-    <label>Проблема / обещание
-      <textarea id="problem" rows="3"></textarea>
+    <label>Главное обещание
+      <textarea id="keyPromise" rows="2"></textarea>
     </label>
 
-    <label>Незакрытая дыра
-      <textarea id="gap" rows="3"></textarea>
+    <label>Дыра / жалоба
+      <textarea id="gap" rows="2"></textarea>
     </label>
 
-    <label>AI-resistance 1–5
-      <input id="aiResistance" type="number" min="1" max="5">
+    <label>Evidence note
+      <textarea id="evidenceNote" rows="2"></textarea>
     </label>
 
-    <label>Коммерческий intent 1–5
-      <input id="commercialIntent" type="number" min="1" max="5">
+    <label>Commercial intent 0–3
+      <input id="commercialIntent" type="number" min="0" max="3">
+    </label>
+
+    <label>Pain signal 0–3
+      <input id="painSignal" type="number" min="0" max="3">
+    </label>
+
+    <label>AI resistance 0–5
+      <input id="aiResistance" type="number" min="0" max="5">
     </label>
 
     <button id="capture">Сохранить сигнал</button>
